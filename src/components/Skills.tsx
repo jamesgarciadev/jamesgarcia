@@ -19,7 +19,7 @@ export default function Skills() {
 
   return (
     <section id="skills" className="mx-auto max-w-5xl scroll-mt-20 px-6 py-24">
-      <SectionHeading index="02" title="Skills" />
+      <SectionHeading index="03" title="Skills" />
 
       <div ref={ref} className="grid gap-x-12 gap-y-8 sm:grid-cols-2">
         {skills.map((skill, i) => (

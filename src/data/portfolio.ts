@@ -17,6 +17,95 @@ export const about = {
   ],
 };
 
+export interface Experience {
+  company: string;
+  role: string;
+  period: string;
+  location: string;
+  summary: string;
+  tags?: string[];
+}
+
+export const experience: Experience[] = [
+  {
+    company: "GrooveStudios / Gilder",
+    role: "Fullstack Developer",
+    period: "Jun 2025 — Jun 2026",
+    location: "Remote (USA)",
+    summary:
+      "Architected and built full-stack web and iOS applications with AI at the core — RAG systems on vector databases for semantic search and knowledge management, high-performance backend APIs, and serverless AWS infrastructure.",
+    tags: [
+      "Next.js",
+      "Swift / iOS",
+      "FastAPI",
+      "RAG / Vector DBs",
+      "AWS Lambda & Fargate",
+    ],
+  },
+  {
+    company: "D-Bit / Microsourcing",
+    role: "Fullstack Developer",
+    period: "Nov 2024 — May 2025",
+    location: "BGC, Taguig City",
+    summary:
+      "C# development and support at a payroll company — end-to-end data integrity from backend to frontend, plus SQL integration scripts migrating legacy data into new schemas.",
+    tags: ["C#", ".NET", "SQL Server"],
+  },
+  {
+    company: "One-off Asia Solution",
+    role: "Web Developer",
+    period: "Jan 2024 — Jun 2024",
+    location: "Pasay City · WFH / on-site",
+    summary:
+      "Designed and developed web applications for clients in the industrial automation market, customizing UIs for SCADA/PLC environments alongside cross-functional teams.",
+    tags: ["Angular", "SCADA", "Ignition", "Oracle"],
+  },
+  {
+    company: "LCS Group of Companies",
+    role: "Project Manager / Programmer",
+    period: "Nov 2022 — Apr 2023",
+    location: "Mandaluyong City · Hybrid",
+    summary:
+      "Drove a casino and crypto trading app across both IT and business sides — DevOps, systems analysis, QA, and full-stack development, steering projects end to end.",
+    tags: ["Next.js", "Go", "Python", "GCP", "Firebase"],
+  },
+  {
+    company: "Geco Asia",
+    role: "SharePoint Admin / Microsoft Cloud Solutions",
+    period: "Oct 2021 — Jun 2022",
+    location: "Singapore",
+    summary:
+      "Planned, designed and executed enterprise projects as a SharePoint admin, validating test cases against client requirements alongside senior management.",
+    tags: ["SPFx", "Power Platform", "AngularJS"],
+  },
+  {
+    company: "Functional Inc",
+    role: "C# Programmer / Client Presenter",
+    period: "Jan 2020 — Oct 2021",
+    location: "Makati City",
+    summary:
+      "Scaled an existing banking Web API and cryptography work, presenting delivery progress to clients across the SDLC.",
+    tags: ["C#", "ASP.NET", "SQL Server", "Azure"],
+  },
+  {
+    company: "Archetype Party Concepts",
+    role: "Family Business · Freelance",
+    period: "2017 — Aug 2019",
+    location: "Mandaluyong City",
+    summary:
+      "Career break running the family business, while taking light freelance projects from UI/UX through frontend implementation.",
+  },
+  {
+    company: "Golaspico Projects",
+    role: "Full Stack Developer / Client Manager",
+    period: "Nov 2013 — Oct 2016",
+    location: "Mandaluyong City",
+    summary:
+      "Web development, HRIS systems and Unity game work for university clients; owned client relationships from requirements to delivery.",
+    tags: ["C#", "Unity", "PHP", "MySQL"],
+  },
+];
+
 export const skills = [
   { name: "TypeScript", level: 96 },
   { name: "Next.js/React", level: 94 },

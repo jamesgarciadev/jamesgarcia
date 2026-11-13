@@ -12,7 +12,7 @@ const iconMap = {
 export default function Contact() {
   return (
     <section id="contact" className="mx-auto max-w-5xl scroll-mt-20 px-6 py-24">
-      <SectionHeading index="04" title="Get In Touch" />
+      <SectionHeading index="05" title="Get In Touch" />
 
       <div className="flex flex-col items-center gap-8 text-center">
         <p className="max-w-xl text-lg leading-relaxed text-zinc-400">

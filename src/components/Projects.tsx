@@ -6,7 +6,7 @@ import { projects } from "@/data/portfolio";
 export default function Projects() {
   return (
     <section id="projects" className="mx-auto max-w-5xl scroll-mt-20 px-6 py-24">
-      <SectionHeading index="03" title="Projects" />
+      <SectionHeading index="04" title="Projects" />
 
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {projects.map((project) => (
