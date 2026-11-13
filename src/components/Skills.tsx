@@ -30,9 +30,16 @@ export default function Skills() {
                 {skill.level}%
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              role="progressbar"
+              aria-valuenow={skill.level}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${skill.name} proficiency`}
+              className="h-2 overflow-hidden rounded-full bg-zinc-800"
+            >
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000 ease-out"
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000 ease-out motion-reduce:transition-none"
                 style={{
                   width: visible ? `${skill.level}%` : "0%",
                   transitionDelay: `${i * 100}ms`,

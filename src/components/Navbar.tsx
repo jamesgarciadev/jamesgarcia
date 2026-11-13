@@ -22,10 +22,17 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled
+        scrolled || open
           ? "border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md"
           : "bg-transparent"
       }`}
@@ -53,9 +60,12 @@ export default function Navbar() {
 
         {/* Mobile toggle */}
         <button
-          className="md:hidden"
+          type="button"
+          className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-300 transition-colors hover:text-emerald-400 md:hidden"
           onClick={() => setOpen(!open)}
-          aria-label="Toggle menu"
+          aria-label={open ? "Close menu" : "Open menu"}
+          aria-expanded={open}
+          aria-controls="mobile-menu"
         >
           {open ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -63,13 +73,16 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {open && (
-        <ul className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-950/95 px-6 py-4 backdrop-blur-md md:hidden">
+        <ul
+          id="mobile-menu"
+          className="flex flex-col gap-1 border-t border-zinc-800 bg-zinc-950/95 px-6 py-4 backdrop-blur-md md:hidden"
+        >
           {links.map((link) => (
             <li key={link.href}>
               <a
                 href={link.href}
                 onClick={() => setOpen(false)}
-                className="block rounded-md px-2 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-emerald-400"
+                className="block rounded-md px-2 py-3 text-sm text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-emerald-400"
               >
                 {link.label}
               </a>

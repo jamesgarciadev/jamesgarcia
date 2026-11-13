@@ -12,12 +12,18 @@ export default function Hero() {
   return (
     <section
       id="home"
-      className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
+      className="relative flex min-h-screen flex-col items-center justify-center px-6 text-center"
     >
+      {/* Subtle accent glow behind the hero content */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_50%_at_50%_40%,rgba(16,185,129,0.08),transparent)]"
+      />
+
       <p className="mb-4 font-mono text-sm text-emerald-400">
         Hi, my name is
       </p>
-      <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
+      <h1 className="text-5xl font-bold tracking-tight sm:text-7xl lg:text-8xl">
         {profile.name}
       </h1>
       <h2 className="mt-3 text-3xl font-semibold text-zinc-400 sm:text-5xl">
@@ -65,7 +71,7 @@ export default function Hero() {
         aria-label="Scroll to about section"
         className="absolute bottom-8 text-zinc-500 transition-colors hover:text-emerald-400"
       >
-        <ArrowDown size={28} className="animate-bounce" />
+        <ArrowDown size={28} className="animate-bounce motion-reduce:animate-none" />
       </a>
     </section>
   );
