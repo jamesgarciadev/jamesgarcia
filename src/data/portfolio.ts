@@ -43,22 +43,22 @@ export const experience: Experience[] = [
     ],
   },
   {
-    company: "D-Bit / Microsourcing",
-    role: "Fullstack Developer",
-    period: "Nov 2024 — May 2025",
-    location: "BGC, Taguig City",
-    summary:
-      "C# development and support at a payroll company — end-to-end data integrity from backend to frontend, plus SQL integration scripts migrating legacy data into new schemas.",
-    tags: ["C#", ".NET", "SQL Server"],
-  },
-  {
     company: "One-off Asia Solution",
     role: "Web Developer",
-    period: "Jan 2024 — Jun 2024",
-    location: "Pasay City · WFH / on-site",
+    period: "Nov 2024 — May 2025",
+    location: "BGC, Taguig City · Project-based / on-site",
     summary:
       "Designed and developed web applications for clients in the industrial automation market, customizing UIs for SCADA/PLC environments alongside cross-functional teams.",
     tags: ["Angular", "SCADA", "Ignition", "Oracle"],
+  },
+  {
+    company: "D-Bit / Microsourcing",
+    role: "Fullstack Developer",
+    period: "Jan 2024 — Jun 2024",
+    location: "Pasay City · WFH",
+    summary:
+      "C# development and support at a payroll company — end-to-end data integrity from backend to frontend, plus SQL integration scripts migrating legacy data into new schemas.",
+    tags: ["C#", ".NET", "SQL Server"],
   },
   {
     company: "LCS Group of Companies",
