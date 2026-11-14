@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { profile } from "@/data/portfolio";
+import { toggleBackgroundMode, useBackgroundMode } from "@/components/GalagaWeb";
 
 const links = [
   { label: "About", href: "#about" },
@@ -16,6 +17,7 @@ const links = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const bgMode = useBackgroundMode();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -59,17 +61,47 @@ export default function Navbar() {
           ))}
         </ul>
 
-        {/* Mobile toggle */}
-        <button
-          type="button"
-          className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-300 transition-colors hover:text-emerald-400 md:hidden"
-          onClick={() => setOpen(!open)}
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          aria-controls="mobile-menu"
-        >
-          {open ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        {/* Background toggle + mobile menu */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={bgMode === "dark"}
+            onClick={toggleBackgroundMode}
+            aria-label="Animated background"
+            title={
+              bgMode === "dark"
+                ? "On — animated cube web (click to hide it)"
+                : "Off — plain background (click to bring the cube web back)"
+            }
+            className={`relative h-6 w-11 shrink-0 cursor-pointer rounded-full border transition-colors duration-300 ${
+              bgMode === "dark"
+                ? "border-emerald-500/60 bg-emerald-500/20"
+                : "border-zinc-700 bg-zinc-800"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full transition-all duration-300 ${
+                bgMode === "dark"
+                  ? "left-[calc(100%-1.25rem)] bg-emerald-400"
+                  : "left-1 bg-zinc-500"
+              }`}
+            />
+          </button>
+
+          {/* Mobile toggle */}
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-300 transition-colors hover:text-emerald-400 md:hidden"
+            onClick={() => setOpen(!open)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+          >
+            {open ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </nav>
 
       {/* Mobile menu */}

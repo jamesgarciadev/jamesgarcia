@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { Heart } from "lucide-react";
 
 type Phase = "loading" | "ready";
 
@@ -15,15 +18,18 @@ interface Enemy {
   mesh: THREE.Mesh;
   baseX: number;
   baseY: number;
-  state: "formation" | "diving";
+  state: "formation" | "diving" | "dead";
   vx: number;
   vy: number;
+  respawn: number; // seconds until a dead cube comes back (>= RESPAWN_DELAY)
   pop: number; // respawn pop timer
 }
 
 export default function LoadingScreen() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  // wired up inside the effect — resets a finished run to a fresh one
+  const restartRef = useRef<() => void>(() => {});
   const [phase, setPhase] = useState<Phase>("loading");
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
@@ -49,6 +55,15 @@ export default function LoadingScreen() {
     scene.background = new THREE.Color(0x05060f);
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
     camera.position.z = 14;
+
+    // lighting for the Wasp's PBR material — enemies/bullets/stars use unlit materials and are unaffected
+    scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+    const keyLight = new THREE.DirectionalLight(0xd6ecff, 2.4);
+    keyLight.position.set(-3, 5, 8);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0x9db8e8, 0.7);
+    fillLight.position.set(4, -3, 6);
+    scene.add(fillLight);
 
     const resize = () => {
       const w = window.innerWidth;
@@ -76,22 +91,58 @@ export default function LoadingScreen() {
     );
     scene.add(stars);
 
-    // ── player ship (emerald — matches site accent) ─────────────
+    // ── player ship — ARC Raiders Wasp scout drone (optimized wasp.glb, ~935 KB) ──
+    // The source model is a Tripo reconstruction whose silhouette lies in its XZ plane;
+    // the basis below brings it nose-up with wings left/right and its front face toward
+    // the camera: model +Z → world +Y (up), model +Y → world +Z (camera), +X → -X.
     const ship = new THREE.Group();
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
-    const body = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 4), bodyMat);
-    body.rotation.x = Math.PI / 2; // point "up" (toward -z? no: cone points +y by default)
-    body.rotation.set(0, 0, 0);
-    const wings = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.16, 0.3), bodyMat);
-    wings.position.y = -0.18;
-    ship.add(body, wings);
+    const SHIP_H = 1.8; // world units tall — the loaded model is scaled to this
+    // player hurtbox half-extents, aligned to the loaded model's silhouette extent
+    let shipHalfW = SHIP_H / 2; // fallback until the GLB finishes loading
+    let shipHalfH = SHIP_H / 2;
+    const dracoLoader = new DRACOLoader().setDecoderPath("/assets/draco/");
+    // the reveal waits for this flag — see the ready gate below
+    let modelReady = false;
+    new GLTFLoader()
+      .setDRACOLoader(dracoLoader)
+      .load(
+        "/assets/wasp.glb",
+        (gltf) => {
+          const model = gltf.scene;
+          // nose up, front face toward the camera (see comment above)
+          const rot = new THREE.Matrix4().makeBasis(
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 1, 0)
+          );
+          model.quaternion.setFromRotationMatrix(rot);
+          model.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(model);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const s = SHIP_H / size.y; // scale so the rotated height matches the game footprint
+          model.scale.setScalar(s);
+          model.position.copy(center).multiplyScalar(-s); // center the bbox on the group origin
+          ship.add(model);
+          // hurtbox tracks the actual rendered silhouette extent
+          shipHalfW = (size.x * s) / 2;
+          shipHalfH = (size.y * s) / 2;
+          modelReady = true;
+        },
+        undefined,
+        () => {
+          // load failed — still reveal via the timeout gate so the game never hangs
+          modelReady = true;
+        }
+      );
+
     ship.position.set(0, PLAYER_Y, 0);
     scene.add(ship);
 
     // ── enemy formation ──────────────────────────────────────────
     const enemies: Enemy[] = [];
-    const pinkMat = new THREE.MeshBasicMaterial({ color: 0xf472b6 });
-    const purpleMat = new THREE.MeshBasicMaterial({ color: 0xa78bfa });
+    const pinkMat = new THREE.MeshBasicMaterial({ color: 0xf472b6, transparent: true });
+    const purpleMat = new THREE.MeshBasicMaterial({ color: 0xa78bfa, transparent: true });
     for (let r = 0; r < ENEMY_ROWS; r++) {
       for (let c = 0; c < ENEMY_COLS; c++) {
         const mesh = new THREE.Mesh(
@@ -102,7 +153,7 @@ export default function LoadingScreen() {
         const baseY = FORMATION_Y - r * 0.75;
         mesh.position.set(baseX, baseY, 0);
         scene.add(mesh);
-        enemies.push({ mesh, baseX, baseY, state: "formation", vx: 0, vy: 0, pop: 0 });
+        enemies.push({ mesh, baseX, baseY, state: "formation", vx: 0, vy: 0, pop: 0, respawn: 0 });
       }
     }
 
@@ -110,8 +161,14 @@ export default function LoadingScreen() {
     const bulletGeo = new THREE.BoxGeometry(0.09, 0.4, 0.09);
     const playerBulletMat = new THREE.MeshBasicMaterial({ color: 0xfde047 });
     const enemyBulletMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-    const pBullets: { mesh: THREE.Mesh; vy: number }[] = [];
+    const pBullets: { mesh: THREE.Mesh; vx: number; vy: number }[] = [];
     const eBullets: { mesh: THREE.Mesh; vx: number; vy: number }[] = [];
+
+    // ── pop shards (enemy destruction burst) ─────────────────────
+    type Shard = { mesh: THREE.Mesh; vx: number; vy: number; life: number };
+    const SHARD_LIFE = 0.45;
+    const shardGeo = new THREE.TetrahedronGeometry(0.07);
+    const shards: Shard[] = [];
 
     // ── game state (closure-scoped, mirrored to React on change) ─
     let playerX = 0;
@@ -131,12 +188,29 @@ export default function LoadingScreen() {
     };
 
     const firePlayerBullet = () => {
-      if (fireCooldown > 0 || over || pBullets.length >= 4) return;
-      fireCooldown = 0.22;
-      const mesh = new THREE.Mesh(bulletGeo, playerBulletMat);
-      mesh.position.set(playerX, PLAYER_Y + 0.55, 0);
-      scene.add(mesh);
-      pBullets.push({ mesh, vy: 16 });
+      if (fireCooldown > 0 || over || pBullets.length >= 8) return;
+      fireCooldown = 0.5; // dual mode — slower cadence, two bullets per shot
+      // always fires straight up — the pointer steers the ship, never the aim
+      for (const off of [-0.28, 0.28]) {
+        const mesh = new THREE.Mesh(bulletGeo, playerBulletMat);
+        mesh.position.set(playerX + off, PLAYER_Y + SHIP_H / 2 + 0.1, 0); // from the nose tip
+        scene.add(mesh);
+        pBullets.push({ mesh, vx: 0, vy: 16 });
+      }
+    };
+
+    const popEnemy = (e: Enemy) => {
+      // burst of shards in the enemy's color at the impact point
+      const color = (e.mesh.material as THREE.MeshBasicMaterial).color.getHex();
+      for (let i = 0; i < 8; i++) {
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true });
+        const m = new THREE.Mesh(shardGeo, mat);
+        m.position.copy(e.mesh.position);
+        scene.add(m);
+        const a = (i / 8) * Math.PI * 2 + Math.random() * 0.6;
+        const sp = 2.5 + Math.random() * 3;
+        shards.push({ mesh: m, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: SHARD_LIFE });
+      }
     };
 
     const resetEnemy = (e: Enemy) => {
@@ -147,6 +221,21 @@ export default function LoadingScreen() {
       e.mesh.position.set(e.baseX, e.baseY, 0);
     };
 
+    const RESPAWN_DELAY = 3; // seconds a destroyed cube stays gone before it comes back
+
+    const killEnemy = (e: Enemy) => {
+      e.state = "dead";
+      e.respawn = RESPAWN_DELAY + Math.random();
+      e.mesh.visible = false;
+    };
+
+    // player hurtbox — an ellipse aligned to the loaded Wasp model's silhouette extent
+    const hitShip = (dx: number, dy: number) => {
+      const nx = dx / shipHalfW;
+      const ny = dy / shipHalfH;
+      return nx * nx + ny * ny < 1;
+    };
+
     const hitPlayer = () => {
       if (invuln > 0 || over) return;
       lv -= 1;
@@ -155,34 +244,43 @@ export default function LoadingScreen() {
       if (lv <= 0) {
         over = true;
         setGameOver(true);
+        // freeze the ship in a visible state — the invuln blink no longer runs,
+        // so without this it could stay stuck on an invisible frame forever
+        ship.visible = true;
+        // sweep up any in-flight bullets so nothing lingers around the GAME OVER text
+        for (const b of [...pBullets, ...eBullets]) scene.remove(b.mesh);
+        pBullets.length = 0;
+        eBullets.length = 0;
       }
     };
 
     // ── input ────────────────────────────────────────────────────
     const onKeyDown = (e: KeyboardEvent) => {
-      if (["ArrowLeft", "ArrowRight", " ", "a", "d", "A", "D"].includes(e.key)) e.preventDefault();
+      if (["ArrowLeft", "ArrowRight", "a", "d", "A", "D"].includes(e.key)) e.preventDefault();
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = true;
       if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = true;
-      if (e.key === " ") firePlayerBullet();
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") keys.left = false;
       if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keys.right = false;
     };
+    // mouse AND touch both arrive as pointer events — one handler covers desktop + mobile;
+    // it only steers the ship (fire direction is fixed straight up)
     const onPointerMove = (e: PointerEvent) => {
-      const visW = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+      const visH = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      const visW = visH * camera.aspect;
       targetX = THREE.MathUtils.clamp(((e.clientX / window.innerWidth - 0.5) * visW), -FIELD_HALF_W, FIELD_HALF_W);
     };
-    const onPointerDown = () => firePlayerBullet();
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     canvas.addEventListener("pointermove", onPointerMove);
-    canvas.addEventListener("pointerdown", onPointerDown);
 
     // ── main loop ────────────────────────────────────────────────
     const clock = new THREE.Clock();
     let raf = 0;
     let running = true;
+    // gameplay stays paused until the reveal — see the ready gate below
+    let started = false;
 
     const tick = () => {
       if (!running) return;
@@ -190,7 +288,7 @@ export default function LoadingScreen() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
 
-      // stars drift
+      // stars drift (always — keeps the backdrop alive behind the loading overlay)
       const pos = starGeo.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < starCount; i++) {
         let y = pos.getY(i) - dt * 1.2;
@@ -198,6 +296,12 @@ export default function LoadingScreen() {
         pos.setY(i, y);
       }
       pos.needsUpdate = true;
+
+      // everything else waits for the reveal so the game starts fresh on screen
+      if (!started) {
+        renderer!.render(scene, camera);
+        return;
+      }
 
       // player movement
       if (!over) {
@@ -208,6 +312,7 @@ export default function LoadingScreen() {
         playerX += (targetX - playerX) * Math.min(1, dt * 14);
         ship.position.x = playerX;
         fireCooldown -= dt;
+        if (fireCooldown <= 0) firePlayerBullet(); // auto-fire, aimed at the pointer
         if (invuln > 0) {
           invuln -= dt;
           ship.visible = Math.floor(t * 12) % 2 === 0;
@@ -230,25 +335,53 @@ export default function LoadingScreen() {
         }
       }
 
-      for (const e of enemies) {
-        if (e.state === "formation") {
-          const bob = Math.sin(t * 2.1 + e.baseX * 1.7) * 0.06;
-          e.mesh.position.x += ((e.baseX + sway) - e.mesh.position.x) * Math.min(1, dt * 8);
-          e.mesh.position.y = e.baseY + bob;
-          e.mesh.rotation.z += dt * 2;
-        } else {
-          e.mesh.position.x += e.vx * dt;
-          e.mesh.position.y += e.vy * dt;
-          e.mesh.rotation.z += dt * 9;
-          if (e.mesh.position.y < -4.5) resetEnemy(e);
+      // on game over the field freezes — a static backdrop behind the GAME OVER text
+      if (!over) {
+        for (const e of enemies) {
+          if (e.state === "dead") {
+            e.respawn -= dt;
+            if (e.respawn <= 0) {
+              // revive back in its formation slot with a pop-in
+              e.state = "formation";
+              e.vx = 0;
+              e.vy = 0;
+              e.pop = 0.25;
+              e.mesh.position.set(e.baseX, e.baseY, 0);
+              e.mesh.visible = true;
+            }
+            continue;
+          }
+          if (e.state === "formation") {
+            const bob = Math.sin(t * 2.1 + e.baseX * 1.7) * 0.06;
+            e.mesh.position.x += ((e.baseX + sway) - e.mesh.position.x) * Math.min(1, dt * 8);
+            e.mesh.position.y = e.baseY + bob;
+            e.mesh.rotation.z += dt * 2;
+          } else {
+            e.mesh.position.x += e.vx * dt;
+            e.mesh.position.y += e.vy * dt;
+            e.mesh.rotation.z += dt * 9;
+            if (e.mesh.position.y < -4.5) resetEnemy(e);
+          }
+          if (e.pop > 0) {
+            e.pop -= dt;
+            const s = 1 + Math.max(0, e.pop) * 2.2;
+            e.mesh.scale.setScalar(s);
+          } else {
+            e.mesh.scale.setScalar(1);
+          }
         }
-        if (e.pop > 0) {
-          e.pop -= dt;
-          const s = 1 + Math.max(0, e.pop) * 2.2;
-          e.mesh.scale.setScalar(s);
-        } else {
-          e.mesh.scale.setScalar(1);
+      }
+
+      // on game over the swarm recedes upward and fades away, clearing space for the text
+      if (over) {
+        const LIFT = 3.4;
+        for (const e of enemies) {
+          if (!e.mesh.visible) continue;
+          const ty = e.baseY + LIFT;
+          e.mesh.position.y += (ty - e.mesh.position.y) * Math.min(1, dt * 2.2);
         }
+        pinkMat.opacity = Math.max(0, pinkMat.opacity - dt * 0.5);
+        purpleMat.opacity = Math.max(0, purpleMat.opacity - dt * 0.5);
       }
 
       // enemy fire (from divers only — Galaga-style pressure)
@@ -271,54 +404,78 @@ export default function LoadingScreen() {
         }
       }
 
-      // move bullets + collisions
-      for (let i = pBullets.length - 1; i >= 0; i--) {
-        const b = pBullets[i];
-        b.mesh.position.y += b.vy * dt;
-        if (b.mesh.position.y > 6.5) {
-          scene.remove(b.mesh);
-          pBullets.splice(i, 1);
-          continue;
-        }
-        for (const e of enemies) {
-          const dx = b.mesh.position.x - e.mesh.position.x;
-          const dy = b.mesh.position.y - e.mesh.position.y;
-          if (dx * dx + dy * dy < 0.32 * 0.32) {
-            addScore(e.state === "diving" ? 25 : 10);
+      // move bullets + collisions (frozen with the field on game over)
+      if (!over) {
+        for (let i = pBullets.length - 1; i >= 0; i--) {
+          const b = pBullets[i];
+          b.mesh.position.x += b.vx * dt;
+          b.mesh.position.y += b.vy * dt;
+          if (b.mesh.position.y > 7 || Math.abs(b.mesh.position.x) > FIELD_HALF_W + 2.5 || b.mesh.position.y < -5) {
             scene.remove(b.mesh);
             pBullets.splice(i, 1);
-            resetEnemy(e);
-            break;
+            continue;
+          }
+          for (const e of enemies) {
+            if (e.state === "dead") continue; // invisible cubes can't be hit
+            const dx = b.mesh.position.x - e.mesh.position.x;
+            const dy = b.mesh.position.y - e.mesh.position.y;
+            if (dx * dx + dy * dy < 0.32 * 0.32) {
+              addScore(e.state === "diving" ? 25 : 10);
+              popEnemy(e); // burst of shards at the impact point
+              scene.remove(b.mesh);
+              pBullets.splice(i, 1);
+              killEnemy(e); // stays gone for >= RESPAWN_DELAY seconds
+              break;
+            }
+          }
+        }
+
+        for (let i = eBullets.length - 1; i >= 0; i--) {
+          const b = eBullets[i];
+          b.mesh.position.x += b.vx * dt;
+          b.mesh.position.y += b.vy * dt;
+          if (b.mesh.position.y < PLAYER_Y - 1.2) {
+            scene.remove(b.mesh);
+            eBullets.splice(i, 1);
+            continue;
+          }
+          const dx = b.mesh.position.x - playerX;
+          const dy = b.mesh.position.y - PLAYER_Y;
+          if (hitShip(dx, dy)) {
+            scene.remove(b.mesh);
+            eBullets.splice(i, 1);
+            hitPlayer();
+          }
+        }
+
+        // enemy body vs player — same silhouette-aligned hurtbox as bullets
+        for (const e of enemies) {
+          if (e.state === "dead") continue;
+          const dx = e.mesh.position.x - playerX;
+          const dy = e.mesh.position.y - PLAYER_Y;
+          if (hitShip(dx, dy)) {
+            hitPlayer();
+            killEnemy(e);
           }
         }
       }
 
-      for (let i = eBullets.length - 1; i >= 0; i--) {
-        const b = eBullets[i];
-        b.mesh.position.x += b.vx * dt;
-        b.mesh.position.y += b.vy * dt;
-        if (b.mesh.position.y < PLAYER_Y - 1.2) {
-          scene.remove(b.mesh);
-          eBullets.splice(i, 1);
+      // pop shards fly out and fade
+      for (let i = shards.length - 1; i >= 0; i--) {
+        const s = shards[i];
+        s.life -= dt;
+        if (s.life <= 0) {
+          scene.remove(s.mesh);
+          (s.mesh.material as THREE.Material).dispose();
+          shards.splice(i, 1);
           continue;
         }
-        const dx = b.mesh.position.x - playerX;
-        const dy = b.mesh.position.y - PLAYER_Y;
-        if (dx * dx + dy * dy < 0.3 * 0.3) {
-          scene.remove(b.mesh);
-          eBullets.splice(i, 1);
-          hitPlayer();
-        }
-      }
-
-      // enemy body vs player
-      for (const e of enemies) {
-        const dx = e.mesh.position.x - playerX;
-        const dy = e.mesh.position.y - PLAYER_Y;
-        if (dx * dx + dy * dy < 0.45 * 0.45) {
-          hitPlayer();
-          resetEnemy(e);
-        }
+        s.mesh.position.x += s.vx * dt;
+        s.mesh.position.y += s.vy * dt;
+        s.mesh.rotation.z += dt * 12;
+        const k = s.life / SHARD_LIFE;
+        (s.mesh.material as THREE.MeshBasicMaterial).opacity = k;
+        s.mesh.scale.setScalar(0.4 + k * 0.8);
       }
 
       renderer!.render(scene, camera);
@@ -338,14 +495,52 @@ export default function LoadingScreen() {
 
     tick();
 
-    // ready when the scene is live and a minimum beat has passed (content is SSR'd underneath)
+    // RESTART (game over) — wipe every live entity and reset all run state to a fresh start.
+    // A short invulnerability window keeps stray bullets from re-killing instantly.
+    restartRef.current = () => {
+      for (const b of pBullets) scene.remove(b.mesh);
+      pBullets.length = 0;
+      for (const b of eBullets) scene.remove(b.mesh);
+      eBullets.length = 0;
+      for (const s of shards) {
+        scene.remove(s.mesh);
+        (s.mesh.material as THREE.Material).dispose();
+      }
+      shards.length = 0;
+      for (const e of enemies) {
+        resetEnemy(e); // back to formation slot with the pop-in effect
+        e.respawn = 0;
+        e.mesh.visible = true;
+      }
+      playerX = 0;
+      targetX = 0;
+      fireCooldown = 0;
+      diveTimer = 1.6;
+      eFireTimer = 0.9;
+      invuln = 1;
+      over = false;
+      sc = 0;
+      lv = 3;
+      setScore(0);
+      setLives(3);
+      setGameOver(false);
+    };
+
+    // reveal only once everything is loaded — in particular the Wasp GLB, so the ship
+    // never pops in after gameplay has already begun. A minimum beat keeps the loading
+    // screen from flashing by on fast connections; a timeout fallback guarantees we
+    // still reveal if the asset fails to load (the error callback also sets modelReady).
     const t0 = performance.now();
+    const MIN_READY_MS = 900;
+    const MODEL_TIMEOUT_MS = 6000;
     const readyTimer = setInterval(() => {
-      if (performance.now() - t0 > 2400) {
+      const elapsed = performance.now() - t0;
+      if (elapsed >= MIN_READY_MS && (modelReady || elapsed > MODEL_TIMEOUT_MS)) {
         clearInterval(readyTimer);
+        started = true; // gameplay starts fresh at the moment of reveal
         setPhase("ready");
       }
-    }, 150);
+    }, 100);
 
     return () => {
       running = false;
@@ -355,7 +550,6 @@ export default function LoadingScreen() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("visibilitychange", onVisibility);
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh || obj instanceof THREE.Points) {
@@ -387,7 +581,7 @@ export default function LoadingScreen() {
       aria-modal="true"
       aria-label="Loading screen with mini game"
     >
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" style={{ touchAction: "none" }} />
       {/* CRT scanlines + vignette */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.16]"
@@ -401,40 +595,52 @@ export default function LoadingScreen() {
       {/* HUD */}
       <div className="absolute top-0 left-0 right-0 flex items-start justify-between p-4 font-mono text-xs tracking-widest sm:text-sm">
         <span className="text-emerald-300">SCORE {String(score).padStart(5, "0")}</span>
-        <span className="flex gap-1.5 pt-1" aria-label={`${lives} lives`}>
-          {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
-            <span key={i} className="text-emerald-400">▲</span>
+        <span className="flex gap-1.5 pt-1" role="img" aria-label={`${lives} lives remaining`}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Heart
+              key={i}
+              size={14}
+              className={`transition-colors duration-300 ${i < lives ? "fill-pink-500 text-pink-500" : "text-zinc-700"}`}
+            />
           ))}
         </span>
       </div>
 
-      {/* center content */}
-      <div className="relative z-10 flex flex-col items-center gap-6 px-6 text-center" aria-live="polite">
+      {/* game over announcement + restart — stays centered */}
+      {phase === "ready" && gameOver && (
+        <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4">
+          <p className="font-mono text-sm tracking-[0.3em] text-pink-400">
+            GAME OVER — SCORE {String(score).padStart(5, "0")}
+          </p>
+          <button
+            onClick={() => restartRef.current()}
+            className="rounded-full border border-emerald-400/60 px-6 py-2.5 font-mono text-xs font-bold tracking-[0.2em] text-emerald-300 transition hover:bg-emerald-400 hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 sm:text-sm"
+          >
+            ↻ RESTART GAME
+          </button>
+        </div>
+      )}
+
+      {/* bottom-right status / CTA — out of the way of the playfield, above the hint line */}
+      <div className="absolute right-4 bottom-10 z-10 flex items-center justify-end" aria-live="polite">
         {phase === "loading" ? (
-          <p className="animate-pulse font-mono text-lg tracking-[0.35em] text-emerald-200 sm:text-xl">
+          <p className="animate-pulse font-mono text-sm tracking-[0.3em] text-emerald-200">
             LOADING...
           </p>
         ) : (
-          <>
-            {gameOver && (
-              <p className="font-mono text-sm tracking-[0.3em] text-pink-400">
-                GAME OVER — SCORE {String(score).padStart(5, "0")}
-              </p>
-            )}
-            <button
-              ref={btnRef}
-              onClick={proceed}
-              className="rounded-full bg-emerald-400 px-8 py-3.5 font-mono text-sm font-bold tracking-[0.25em] text-black shadow-[0_0_28px_rgba(52,211,153,0.45)] transition hover:bg-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200"
-            >
-              PROCEED TO SITE →
-            </button>
-          </>
+          <button
+            ref={btnRef}
+            onClick={proceed}
+            className="rounded-full bg-emerald-400 px-6 py-3 font-mono text-xs font-bold tracking-[0.2em] text-black shadow-[0_0_28px_rgba(52,211,153,0.45)] transition hover:bg-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200 sm:text-sm"
+          >
+            PROCEED TO SITE →
+          </button>
         )}
       </div>
 
-      {/* controls hint */}
-      <p className="absolute bottom-4 left-0 right-0 text-center font-mono text-[11px] tracking-widest text-slate-500">
-        ← → / A D MOVE · SPACE SHOOT · (OR DRAG + TAP)
+      {/* controls hint — desktop only (drag is self-evident on touch) */}
+      <p className="absolute bottom-4 left-0 right-0 hidden text-center font-mono text-[11px] tracking-widest text-slate-500 sm:block">
+        ← → / A D OR DRAG TO MOVE · AUTO-FIRE UPWARD
       </p>
     </div>
   );
