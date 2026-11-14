@@ -512,6 +512,10 @@ export default function LoadingScreen() {
         e.respawn = 0;
         e.mesh.visible = true;
       }
+      // the game-over fade left the shared cube materials transparent — restore them,
+      // otherwise every cube comes back invisible after a restart
+      pinkMat.opacity = 1;
+      purpleMat.opacity = 1;
       playerX = 0;
       targetX = 0;
       fireCooldown = 0;
