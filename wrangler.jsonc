@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jamesgarcia",
+  "compatibility_date": "2026-11-14",
+  // Pure static site: serve the Next.js static export (out/) as Workers assets.
+  // No JS worker needed — Cloudflare's edge serves the files directly.
+  "assets": {
+    "directory": "./out"
+  }
+}
