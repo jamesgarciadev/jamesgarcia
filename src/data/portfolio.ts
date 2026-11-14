@@ -2,7 +2,7 @@ export const profile = {
   name: "Jimmy James Garcia",
   role: "Senior Full-Stack Developer",
   tagline:
-    "I build distributed systems end to end — TypeScript/Next.js frontends, Node, Go, Rails, and Python services, on AWS, Azure, and GCP.",
+    "I build distributed systems end to end — TypeScript/Next.js frontends backed by .NET, Node, Go, Rails, or Python services, with real-time APIs over GraphQL, gRPC, and WebSockets on AWS, Azure, and GCP.",
   location: "Mandaluyong, Philippines",
   email: "jamesgarciaph@gmail.com",
   github: "https://github.com/jamesgarciadev",
@@ -12,7 +12,7 @@ export const profile = {
 
 export const about = {
   paragraphs: [
-    "I've spent the last decade building software across the whole stack — TypeScript and Next.js on the front end, with Node.js, Laravel, Rails, Go, C#, and Python/FastAPI services behind it. Most of my work has been in distributed systems: designing GraphQL and gRPC APIs, keeping WebSockets connections healthy under load, and picking between PostgreSQL, MongoDB, and Redis for each job. I've shipped to AWS, Azure, and GCP, and I'm comfortable owning a system from schema design through production incidents.",
+    "I've spent the last decade building software across the whole stack — TypeScript and Next.js on the front end, with Node.js, Laravel, Rails, Go, C#/.NET, and Python/FastAPI services behind it. Most of my work has been in distributed systems: designing GraphQL and gRPC APIs, keeping WebSockets connections healthy under load, and picking between PostgreSQL, MongoDB, and Redis for each job. I've shipped to AWS, Azure, and GCP, and I'm comfortable owning a system from schema design through production incidents.",
     "Lately my focus has been on LLM tooling — RAG pipelines, vector databases, and the plumbing that makes models useful in real products. Outside of work I run local model stacks with LM Studio and Ollama, experimenting with small models for code search, summarization, and offline workflows.",
   ],
 };
